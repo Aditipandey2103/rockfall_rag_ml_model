@@ -6,5 +6,5 @@ flask
 chromadb
 sentence-transformers
 matplotlib
-json
+
 datetime 
