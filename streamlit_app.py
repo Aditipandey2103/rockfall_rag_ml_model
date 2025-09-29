@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 from datetime import datetime
+import numpy as np
 
 # Import your predictor class (RAG-enabled)
 from rockfall_app import EnhancedRockfallPredictor
@@ -55,16 +56,90 @@ with st.form("predict_form"):
     feature_input = st.text_area(
         "Enter feature JSON (e.g. {'Slope Angle': 28, 'Rainfall': 10, 'Elevation': 1200})"
     )
-    model_choice = st.selectbox("Select Model", options=list(results.keys()) if results else ["Random Forest"])
+    
+    model_options = list(results.keys()) if results else ["Random Forest"]
+    model_options.append("All Models")
+    model_choice = st.selectbox("Select Model", options=model_options)
+
     submit_pred = st.form_submit_button("Predict")
+
 
 if submit_pred:
     try:
         feature_data = json.loads(feature_input)
-        pred_res = predictor.predict_with_explanation(feature_data, model_choice)
-        st.json(pred_res)
+        
+        # new code
+        if model_choice == "All Models":
+            preds = {}
+            for name in results.keys():
+                preds[name] = predictor.predict_with_explanation(feature_data, name)
+
+    # Calculate ensemble average
+            avg_score = np.mean([p["prediction"] for p in preds.values()])
+
+    # Map to user-friendly risk label
+            # Map to user-friendly risk label, immediate actions, and consequences
+            if avg_score < 0.3:
+                risk_label = "Low Risk ✅ (Site appears safe)"
+                actions = [
+                "Routine monitoring of slopes",
+                "Ensure standard safety protocols are followed"
+                ]
+                consequences = "Minimal risk of rockfall; operations can continue normally."
+            elif avg_score < 0.6:
+                risk_label = "Moderate Risk ⚠️ (Monitor conditions closely)"
+                actions = [
+            "Increase frequency of slope inspections",
+            "Restrict access to high-risk areas during rainfall",
+            "Prepare emergency response team"
+                ]
+                consequences = "Possible minor rockfall; caution required for personnel."
+            else:
+                risk_label = "High Risk 🚨 (Unsafe, potential rockfall)"
+                actions = [
+            "Evacuate personnel from the site immediately",
+            "Suspend all ongoing operations",
+            "Deploy emergency response teams",
+            "Issue alert to local authorities"
+                ]
+                consequences = "High probability of rockfall; severe damage or casualties possible."
+
+# Show clean summary
+            st.subheader("Prediction Summary")
+            st.metric("Risk Score", f"{avg_score:.2f}")
+            if avg_score < 0.3:
+                st.success(risk_label)
+            elif avg_score < 0.6:
+                st.warning(risk_label)
+            else:
+                st.error(risk_label)
+
+# Show recommended actions and consequences
+            st.subheader("Recommended Immediate Actions")
+            for act in actions:
+                st.write(f"- {act}")
+
+            st.subheader("Potential Consequences")
+            st.write(consequences)
+
+
+   
+
+    # (Optional) allow user to expand and see model-wise details
+            with st.expander("See model-wise details"):
+                df = pd.DataFrame([
+                    {"Model": name, "Prediction": p["prediction"]}
+                    for name, p in preds.items()
+                    ])
+                st.dataframe(df)
+                st.json(preds)
+        else:
+            pred_res = predictor.predict_with_explanation(feature_data, model_choice)
+            st.json(pred_res)
+
     except Exception as e:
         st.error(f"Prediction failed: {e}")
+
 
 # --- Knowledge Base Query ---
 st.header("Ask the Knowledge Base")
